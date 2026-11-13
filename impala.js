@@ -1,0 +1,28 @@
+(function(){
+"use strict";
+const originalEditor=measurementEditors;
+const sections=[
+{title:"Robniki",start:6,end:9,total:10,price:"D7",cost:"D8",factor:100,rate:65},
+{title:"Plošče 3 cm",start:13,end:20,total:21,price:"D14",cost:"D15",factor:10000,rate:145},
+{title:"Plošče 5 cm",start:24,end:29,total:30,price:"D25",cost:"D26",factor:10000,rate:260},
+{title:"Plošče 6 cm",start:33,end:38,total:39,price:"D34",cost:"D35",factor:10000,rate:300},
+{title:"Plošče 8 cm",start:42,end:47,total:48,price:"D43",cost:"D44",factor:10000,rate:400}
+];
+function safe(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function n(v){return Number(String(v??"").replace(",","."))||0;}
+function sheet(t){return t.impalaCells||(t.impalaCells={});}
+function compute(t){const c=sheet(t),out={};let grand=0;
+sections.forEach((s,i)=>{let total=0;for(let r=s.start;r<=s.end;r++){const x=i===0?n(c["F"+r])*n(c["G"+r])/100:n(c["E"+r])*n(c["F"+r])*n(c["G"+r])/10000;out["J"+r]=x;out["H"+r]=x;total+=x;}out["J"+s.total]=total;out["H"+s.total]=total;const price=c[s.price]===undefined?s.rate:n(c[s.price]);out[s.price]=price;out[s.cost]=price*total;grand+=out[s.cost];});
+out.B57=grand;for(const [cell,extra] of Object.entries({E52:800,E56:400,E57:500,E58:550,E59:600,E60:650,E62:1000}))out[cell]=grand+extra;out.H40=(out.H39||0)*100;return out;}
+function renderImpala(t){const c=sheet(t),out=compute(t);let html='<section class="measurement-editor impala-original"><h3>NALOG IMPALA</h3><p class="help">Vpis v originalnih celicah; izračuni dolžin, površin in cen se sproti posodabljajo. Vrednosti se shranijo v projekt.</p>';
+sections.forEach((s,i)=>{html+='<h4 style="padding:9px;background:#e8eef3;margin-top:15px">'+safe(s.title)+'</h4><div class="tablewrap"><table><thead><tr><th>Vrstica</th><th>Opis</th><th>'+ (i===0?"F – dolžina":"E – dolžina")+'</th><th>'+ (i===0?"G – kosov":"F – širina")+'</th>'+(i===0?"":'<th>G – kosov</th>')+'<th>J – skupaj</th></tr></thead><tbody>';
+for(let r=s.start;r<=s.end;r++){const keys=i===0?["F"+r,"G"+r]:["E"+r,"F"+r,"G"+r];html+='<tr><td>'+r+'</td><td><input style="min-width:100px" aria-label="Opis '+r+'" value="'+safe(c["B"+r]||"")+'" onchange="impalaChange(\'B'+r+'\',this.value)"></td>'+keys.map(k=>'<td><input style="width:90px" type="number" step="any" aria-label="'+k+'" value="'+safe(c[k]??"")+'" oninput="impalaChange(\''+k+'\',this.value)"></td>').join("")+'<td><strong data-impala-result="J'+r+'">'+out["J"+r].toFixed(3)+'</strong></td></tr>';}
+html+='</tbody></table></div><div style="padding:10px;background:#f4f6f8">Skupaj: <b data-impala-result="J'+s.total+'">'+out["J"+s.total].toFixed(3)+'</b> '+(i===0?"m":"m²")+' · Cena: <input type="number" step="any" style="width:95px" value="'+safe(c[s.price]??s.rate)+'" oninput="impalaChange(\''+s.price+'\',this.value)"> € · Vrednost: <b data-impala-result="'+s.cost+'">'+out[s.cost].toFixed(2)+'</b> €</div>';});
+html+='<div style="padding:15px;background:#e5f0e8;margin-top:14px">Skupaj B57: <strong data-impala-result="B57">'+out.B57.toFixed(2)+'</strong> €</div><div class="tablewrap"><table><thead><tr><th>Celica</th><th>Izračun</th></tr></thead><tbody>'+["E52","E56","E57","E58","E59","E60","E62"].map(k=>'<tr><td>'+k+'</td><td data-impala-result="'+k+'">'+out[k].toFixed(2)+'</td></tr>').join("")+'</tbody></table></div></section>';return html;}
+function impalaChange(key,value){const t=draftMeasurements.IMPALA;if(!t)return;sheet(t)[key]=value;const out=compute(t);document.querySelectorAll("[data-impala-result]").forEach(el=>{const k=el.getAttribute("data-impala-result");el.textContent=(out[k]||0).toFixed(k==="B57"||k[0]==="D"||k[0]==="E"?2:3);});if(page==="project-measurements")saveProjectMeasurements(false);}
+window.impalaChange=impalaChange;
+measurementEditors=function(templates){return Object.entries(templates||{}).map(([name,t])=>name==="IMPALA"?renderImpala(t):originalEditor({[name]:t})).join("");};
+const oldSelect=selectMeasurementTemplate;
+selectMeasurementTemplate=function(name){oldSelect(name);};
+render();
+})();
