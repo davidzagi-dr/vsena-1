@@ -21,6 +21,17 @@ html+='</tbody></table></div><div style="padding:10px;background:#f4f6f8">Skupaj
 html+='<div style="padding:15px;background:#e5f0e8;margin-top:14px">Material: <strong data-impala-result="B57">'+out.B57.toFixed(2)+'</strong> €</div><div style="padding:15px;background:#f4f6f8;margin-top:10px"><label for="impala-manufacture">Cena izdelave: </label><select id="impala-manufacture" onchange="impalaChange(\'manufacturePrice\',this.value)"><option value="0"'+(c.manufacturePrice!==undefined&&!n(c.manufacturePrice)?' selected':'')+'>Izberi ceno</option>'+Array.from({length:19},(_,i)=>100+i*50).map(v=>'<option value="'+v+'"'+((c.manufacturePrice===undefined?800:n(c.manufacturePrice))===v?' selected':'')+'>'+v+' €</option>').join('')+'</select></div><div style="padding:15px;background:#e5f0e8;margin-top:10px">Cena brez DDV: <strong data-impala-result="FINAL">'+out.FINAL.toFixed(2)+'</strong> €</div><div style="padding:15px;background:#f4f6f8;margin-top:10px"><label for="impala-vat">DDV: </label><select id="impala-vat" onchange="impalaChange(\'vatRate\',this.value)"><option value="22"'+(out.VAT_RATE===22?' selected':'')+'>22 %</option><option value="9.5"'+(out.VAT_RATE===9.5?' selected':'')+'>9,5 %</option></select><div style="margin-top:8px">Znesek DDV: <strong data-impala-result="VAT_AMOUNT">'+out.VAT_AMOUNT.toFixed(2)+'</strong> €</div></div><div style="padding:15px;background:#e5f0e8;margin-top:10px">Cena z DDV: <strong data-impala-result="WITH_VAT">'+out.WITH_VAT.toFixed(2)+'</strong> €</div></section>';return html;}
 function impalaChange(key,value){const t=draftMeasurements.IMPALA;if(!t)return;sheet(t)[key]=value;const out=compute(t);document.querySelectorAll("[data-impala-result]").forEach(el=>{const k=el.getAttribute("data-impala-result");el.textContent=(out[k]||0).toFixed(k==="B57"||k==="FINAL"||k==="VAT_AMOUNT"||k==="WITH_VAT"||k==="MANUFACTURE"||k[0]==="D"||k[0]==="E"?2:3);});if(page==="project-measurements")saveProjectMeasurements(false);}
 window.impalaChange=impalaChange;
+// Vsa polja mer in cen so navadna besedilna polja brez številčnih spinnerjev.
+function impalaRemoveSpinners(){
+ document.querySelectorAll(".impala-original input[type='number']").forEach(input=>{
+  input.type="text";
+  input.inputMode="decimal";
+  input.removeAttribute("step");
+ });
+}
+const impalaSpinnerObserver=new MutationObserver(impalaRemoveSpinners);
+impalaSpinnerObserver.observe(document.body,{childList:true,subtree:true});
+
 const impalaCompactStyle=document.createElement("style");
 impalaCompactStyle.textContent=".impala-original .impala-measures table{width:max-content!important;min-width:0!important;max-width:none!important}.impala-original .impala-measures th,.impala-original .impala-measures td{padding:3px 4px!important;min-width:0!important;white-space:nowrap}.impala-original .impala-measures input{width:72px!important;min-width:0!important;max-width:72px!important;margin:0!important}.impala-original .impala-measures th{font-size:12px}.impala-original input[type=number]{appearance:textfield;-moz-appearance:textfield}.impala-original input[type=number]::-webkit-inner-spin-button,.impala-original input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}";
 document.head.appendChild(impalaCompactStyle);
@@ -55,4 +66,5 @@ measurementEditors=function(templates){return Object.entries(templates||{}).map(
 const oldSelect=selectMeasurementTemplate;
 selectMeasurementTemplate=function(name){oldSelect(name);};
 render();
+impalaRemoveSpinners();
 })();
