@@ -21,6 +21,32 @@ html+='</tbody></table></div><div style="padding:10px;background:#f4f6f8">Skupaj
 html+='<div style="padding:15px;background:#e5f0e8;margin-top:14px">Material: <strong data-impala-result="B57">'+out.B57.toFixed(2)+'</strong> €</div><div style="padding:15px;background:#f4f6f8;margin-top:10px"><label for="impala-manufacture">Cena izdelave: </label><select id="impala-manufacture" onchange="impalaChange(\'manufacturePrice\',this.value)"><option value="0"'+(!n(c.manufacturePrice)?' selected':'')+'>Izberi ceno</option>'+Array.from({length:19},(_,i)=>100+i*50).map(v=>'<option value="'+v+'"'+(n(c.manufacturePrice)===v?' selected':'')+'>'+v+' €</option>').join('')+'</select></div><div style="padding:15px;background:#e5f0e8;margin-top:10px">Cena brez DDV: <strong data-impala-result="FINAL">'+out.FINAL.toFixed(2)+'</strong> €</div><div style="padding:15px;background:#f4f6f8;margin-top:10px"><label for="impala-vat">DDV: </label><select id="impala-vat" onchange="impalaChange(\'vatRate\',this.value)"><option value="22"'+(out.VAT_RATE===22?' selected':'')+'>22 %</option><option value="9.5"'+(out.VAT_RATE===9.5?' selected':'')+'>9,5 %</option></select><div style="margin-top:8px">Znesek DDV: <strong data-impala-result="VAT_AMOUNT">'+out.VAT_AMOUNT.toFixed(2)+'</strong> €</div></div><div style="padding:15px;background:#e5f0e8;margin-top:10px">Cena z DDV: <strong data-impala-result="WITH_VAT">'+out.WITH_VAT.toFixed(2)+'</strong> €</div></section>';return html;}
 function impalaChange(key,value){const t=draftMeasurements.IMPALA;if(!t)return;sheet(t)[key]=value;const out=compute(t);document.querySelectorAll("[data-impala-result]").forEach(el=>{const k=el.getAttribute("data-impala-result");el.textContent=(out[k]||0).toFixed(k==="B57"||k==="FINAL"||k==="VAT_AMOUNT"||k==="WITH_VAT"||k==="MANUFACTURE"||k[0]==="D"||k[0]==="E"?2:3);});if(page==="project-measurements")saveProjectMeasurements(false);}
 window.impalaChange=impalaChange;
+// Premikanje med polji za mere s smernimi tipkami (brez spreminjanja števil).
+document.addEventListener("keydown",function(event){
+  if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key))return;
+  const input=event.target;
+  if(!(input instanceof HTMLInputElement)||!input.matches(".impala-original .tablewrap tbody input[type=number]"))return;
+  const table=input.closest("table");
+  const row=input.closest("tr");
+  if(!table||!row)return;
+  const rows=Array.from(table.querySelectorAll("tbody tr"));
+  const rowIndex=rows.indexOf(row);
+  const inputs=Array.from(row.querySelectorAll("input[type=number]"));
+  const colIndex=inputs.indexOf(input);
+  if(rowIndex<0||colIndex<0)return;
+  let target;
+  if(event.key==="ArrowLeft")target=inputs[colIndex-1];
+  else if(event.key==="ArrowRight")target=inputs[colIndex+1];
+  else {
+    const nextRow=rows[rowIndex+(event.key==="ArrowUp"?-1:1)];
+    if(nextRow)target=nextRow.querySelectorAll("input[type=number]")[colIndex];
+  }
+  if(!target)return;
+  event.preventDefault();
+  target.focus();
+  target.select();
+},true);
+
 measurementEditors=function(templates){return Object.entries(templates||{}).map(([name,t])=>name==="IMPALA"?renderImpala(t):originalEditor({[name]:t})).join("");};
 const oldSelect=selectMeasurementTemplate;
 selectMeasurementTemplate=function(name){oldSelect(name);};
