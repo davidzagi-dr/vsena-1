@@ -45,7 +45,39 @@ function removeMeasurementRow(n,i){draftMeasurements[n].rows.splice(i,1);documen
 function changeMeasurement(n,i,k,v){draftMeasurements[n].rows[i][k]=v;const table=document.getElementById('measurement-editors');const tr=table?.querySelectorAll('.measurement-editor')[Object.keys(draftMeasurements).indexOf(n)]?.querySelectorAll('tbody tr')[i];if(tr){const r=draftMeasurements[n].rows[i];tr.children[4].textContent=measurementArea(r).toFixed(3);const total=tr.closest('.measurement-editor')?.querySelector('.measurement-total');if(total)total.textContent=(draftMeasurements[n].rows||[]).reduce((sum,row)=>sum+measurementArea(row),0).toFixed(3)}if(page==='project-measurements')saveProjectMeasurements(false)}
 
 function projectMeasurementsPage(){const p=db.projects.find(x=>x.id===selectedProjectId);if(!p)return '<div class="panel">Projekt ni najden.</div>';return '<div class="panel"><div class="sectiontop"><h2>Izmere: '+esc(p.name)+'</h2><div class="actions"><button type="button" class="btn" onclick="printProjectMeasurements(true)">🖨 Natisni izmere</button><button type="button" class="btn" onclick="saveProjectMeasurements(true)">Shrani in nazaj</button></div></div>'+measurementPicker()+'<footer><button class="btn primary" onclick="saveProjectMeasurements(true)">Shrani izmere</button></footer></div>'}
-function printProjectMeasurements(useDraft){const p=db.projects.find(x=>x.id===selectedProjectId);if(!p)return;const c=db.clients.find(x=>x.id===p.client)||{};if(useDraft)saveProjectMeasurements(false);const data=useDraft?draftMeasurements:(p.measurements||{});if(!Object.keys(data).length){alert('Najprej izberi predlogo in vnesi mere.');return;}const holder=document.createElement('div');holder.innerHTML=measurementEditors(data);holder.querySelectorAll('tbody tr').forEach(tr=>{const inputs=[...tr.querySelectorAll('input')];if(!inputs.length||inputs.some(input=>!String(input.value||'').trim()||Number(String(input.value).replace(',','.'))===0)){tr.remove();}});holder.querySelectorAll('table').forEach(table=>{if(!table.querySelector('tbody tr')){const wrap=table.closest('.tablewrap');if(wrap){const heading=wrap.previousElementSibling;if(heading&&/^H[34]$/.test(heading.tagName))heading.remove();wrap.remove();}}});holder.querySelectorAll('.measurement-editor').forEach(section=>{[...section.children].forEach(child=>{if(child.tagName==='DIV'&&!child.classList.contains('tablewrap'))child.remove();});});const printableSummary=[];Object.entries(data).forEach(([template,t])=>{if(!t)return;const c=t.impalaCells||{};const manufacture=template.startsWith('POLICE')?null:(c.manufacturePrice===undefined?800:Number(c.manufacturePrice)||0);const calculated=projectPriceLabel({measurements:{[template]:t}},false);const net=Number(calculated.replace(/[^0-9,]/g,'').replace(',','.'))||0;const material=net-(manufacture||0);printableSummary.push('<div style="margin-top:15px;padding:10px;border-top:1px solid #9ba7b4"><b>'+esc(template)+'</b><div>Material: <b>'+material.toLocaleString('sl-SI',{minimumFractionDigits:2,maximumFractionDigits:2})+' €</b></div>'+(manufacture===null?'':'<div><b>iz '+manufacture+'</b></div>')+'</div>');});holder.insertAdjacentHTML('beforeend',printableSummary.join(''));holder.querySelectorAll('input,select,textarea').forEach(el=>{const span=document.createElement('span');span.textContent=el.tagName==='SELECT'?el.options[el.selectedIndex]?.textContent||'':el.value;el.replaceWith(span)});holder.querySelectorAll('button,.help').forEach(el=>el.remove());const name=esc(c.name||p.clientName||'—'),place=esc(p.objectLocation||'—');const html='<!doctype html><html lang="sl"><head><meta charset="utf-8"><title>Izmere - '+name+'</title><style>@page{size:A4;margin:13mm}body{font:12px Arial,sans-serif;color:#1d2935}header{border-bottom:2px solid #263e51;margin-bottom:16px;padding-bottom:12px}h1{font-size:21px;margin:0 0 8px}h2{font-size:16px}h3{font-size:15px;margin:15px 0 8px}h4{font-size:13px;margin:12px 0 6px}table{width:100%;border-collapse:collapse;margin:8px 0 12px}th,td{border:1px solid #cbd3d9;padding:5px 7px;text-align:left}th{background:#edf1f4}.measurement-editor{margin-bottom:20px}.tablewrap{overflow:visible}.impala-measures table{width:100%!important}.measurement-editor>div{break-inside:avoid}section{break-inside:auto}tr{break-inside:avoid}button{display:none}span{font-weight:normal}b,strong{font-weight:700}</style></head><body><header><h1>IZMERE – '+name+'</h1><div><b>Stranka:</b> '+name+'</div><div><b>Kraj objekta:</b> '+place+'</div></header>'+holder.innerHTML+'<script>window.onload=function(){window.print()}<\/script></body></html>';const w=window.open('','_blank');if(!w){alert('Brskalnik je blokiral okno za tiskanje. Dovoli pojavna okna.');return;}w.document.open();w.document.write(html);w.document.close();}
+function printProjectMeasurements(useDraft){const p=db.projects.find(x=>x.id===selectedProjectId);if(!p)return;const c=db.clients.find(x=>x.id===p.client)||{};if(useDraft)saveProjectMeasurements(false);const data=useDraft?draftMeasurements:(p.measurements||{});if(!Object.keys(data).length){alert('Najprej izberi predlogo in vnesi mere.');return;}const holder=document.createElement('div');holder.innerHTML=measurementEditors(data);holder.querySelectorAll('tbody tr').forEach(tr=>{const inputs=[...tr.querySelectorAll('input')];if(!inputs.length||inputs.some(input=>!String(input.value||'').trim()||Number(String(input.value).replace(',','.'))===0)){tr.remove();}});holder.querySelectorAll('table').forEach(table=>{if(!table.querySelector('tbody tr')){const wrap=table.closest('.tablewrap');if(wrap){const heading=wrap.previousElementSibling;if(heading&&/^H[34]$/.test(heading.tagName))heading.remove();wrap.remove();}}});holder.querySelectorAll('.measurement-editor').forEach(section=>{[...section.children].forEach(child=>{if(child.tagName==='DIV'&&!child.classList.contains('tablewrap'))child.remove();});});const printableSummary=[];Object.entries(data).forEach(([template,t])=>{if(!t)return;const c=t.impalaCells||{};const manufacture=template.startsWith('POLICE')?null:(c.manufacturePrice===undefined?800:Number(c.manufacturePrice)||0);const calculated=projectPriceLabel({measurements:{[template]:t}},false);const net=Number(calculated.replace(/[^0-9,]/g,'').replace(',','.'))||0;const material=net-(manufacture||0);printableSummary.push('<div style="margin-top:15px;padding:10px;border-top:1px solid #9ba7b4"><b>'+esc(template)+'</b><div>Material: <b>'+material.toLocaleString('sl-SI',{minimumFractionDigits:2,maximumFractionDigits:2})+' €</b></div>'+(manufacture===null?'':'<div><b>iz '+manufacture+'</b></div>')+'</div>');});holder.insertAdjacentHTML('beforeend',printableSummary.join(''));holder.querySelectorAll('input,select,textarea').forEach(el=>{const span=document.createElement('span');span.textContent=el.tagName==='SELECT'?el.options[el.selectedIndex]?.textContent||'':el.value;el.replaceWith(span)});holder.querySelectorAll('button,.help').forEach(el=>el.remove());const name=esc(c.name||p.clientName||'—'),place=esc(p.objectLocation||'—');const html='<!doctype html><html lang="sl"><head><meta charset="utf-8"><title>Izmere - '+name+'</title><style>@page{size:A4;margin:13mm}body{font:12px Arial,sans-serif;color:#1d2935}header{border-bottom:2px solid #263e51;margin-bottom:16px;padding-bottom:12px}h1{font-size:21px;margin:0 0 8px}h2{font-size:16px}h3{font-size:15px;margin:15px 0 8px}h4{font-size:13px;margin:12px 0 6px}table{width:100%;border-collapse:collapse;margin:8px 0 12px}th,td{border:1px solid #cbd3d9;padding:5px 7px;text-align:left}th{background:#edf1f4}.measurement-editor{margin-bottom:20px}.tablewrap{overflow:visible}.impala-measures table{width:100%!important}.measurement-editor>div{break-inside:avoid}section{break-inside:auto}tr{break-inside:avoid}button{display:none}span{font-weight:normal}b,strong{font-weight:700}</style></head><body><header><h1>IZMERE – '+name+'</h1><div><b>Stranka:</b> '+name+'</div><div><b>Kraj objekta:</b> '+place+'</div></header>'+holder.innerHTML+'<script>window.onload=function(){window.print()}<\/script><script>
+(function(){
+  // Puščice med vsemi vnosnimi polji projekta, tudi med različnimi tabelami.
+  document.addEventListener('keydown',function(e){
+    if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)||e.altKey||e.ctrlKey||e.metaKey||e.shiftKey)return;
+    const el=e.target;
+    if(!el.matches||!el.matches('input,textarea,select'))return;
+    const root=el.closest('#editor,#measurement-editors,.modal');
+    if(!root)return;
+    const inputs=[...root.querySelectorAll('input:not([type=hidden]),textarea,select')].filter(x=>!x.disabled&&x.getClientRects().length);
+    const index=inputs.indexOf(el);if(index<0)return;
+    const table=el.closest('table'),row=el.closest('tr');
+    let target=null;
+    if(table&&row){
+      const rows=[...table.querySelectorAll('tbody tr')],ri=rows.indexOf(row),cols=[...row.querySelectorAll('input,textarea,select')],ci=cols.indexOf(el);
+      if(ri>=0&&ci>=0){
+        if(e.key==='ArrowUp'||e.key==='ArrowDown'){
+          const nr=rows[ri+(e.key==='ArrowUp'?-1:1)];
+          if(nr)target=[...nr.querySelectorAll('input,textarea,select')][ci];
+        }else target=cols[ci+(e.key==='ArrowLeft'?-1:1)];
+      }
+    }
+    // Ob robu tabele nadaljuj v naslednji/prejšnji razdelek.
+    if(!target){
+      const step=(e.key==='ArrowLeft'||e.key==='ArrowUp')?-1:1;
+      target=inputs[index+step];
+    }
+    if(!target)return;
+    e.preventDefault();target.focus();
+    if(target.select&&target.tagName==='INPUT')target.select();
+  },true);
+})();
+</script></body></html>';const w=window.open('','_blank');if(!w){alert('Brskalnik je blokiral okno za tiskanje. Dovoli pojavna okna.');return;}w.document.open();w.document.write(html);w.document.close();}
 function editProjectMeasurements(){const p=db.projects.find(x=>x.id===selectedProjectId);if(!p)return;draftMeasurements=JSON.parse(JSON.stringify(p.measurements||{}));page='project-measurements';render();scrollTo(0,0)}
 function saveProjectMeasurements(back){const p=db.projects.find(x=>x.id===selectedProjectId);if(!p)return;p.measurements=JSON.parse(JSON.stringify(draftMeasurements));syncProjectOffer(p);save();if(back){page='project-detail';render();scrollTo(0,0);toast('Izmere shranjene')}}
 function newProjectPage(){return `<div class="panel"><div class="sectiontop"><h2>Dodaj nov projekt</h2><button type="button" class="btn" onclick="go('projects')">← Nazaj na projekte</button></div><form id="editor" onsubmit="submitSimple(event,'projects','')"><div class="formgrid">${fields.projects.map(f=>fieldHTML(f,{})).join('')}</div>${measurementPicker()}<footer><button type="button" class="btn" onclick="go('projects')">Prekliči</button><button type="submit" class="btn primary">Shrani projekt</button></footer></form></div>`}
@@ -105,33 +137,6 @@ const impalaCompactStyle=document.createElement("style");
 impalaCompactStyle.textContent=".impala-original .impala-measures table{width:max-content!important;min-width:0!important;max-width:none!important}.impala-original .impala-measures th,.impala-original .impala-measures td{padding:3px 4px!important;min-width:0!important;white-space:nowrap}.impala-original .impala-measures input{width:72px!important;min-width:0!important;max-width:72px!important;margin:0!important}.impala-original .impala-measures th{font-size:12px}.impala-original input[type=number]{appearance:textfield;-moz-appearance:textfield}.impala-original input[type=number]::-webkit-inner-spin-button,.impala-original input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}";
 document.head.appendChild(impalaCompactStyle);
 document.addEventListener("wheel",function(e){if(e.target.matches(".impala-original input[type=number]")&&document.activeElement===e.target)e.target.blur();},{passive:true});
-// Premikanje med polji za mere s smernimi tipkami (brez spreminjanja števil).
-document.addEventListener("keydown",function(event){
-  if(!["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(event.key))return;
-  const input=event.target;
-  if(!(input instanceof HTMLInputElement)||!input.matches(".impala-original .impala-measures tbody input"))return;
-  const table=input.closest("table");
-  const row=input.closest("tr");
-  if(!table||!row)return;
-  const rows=Array.from(table.querySelectorAll("tbody tr"));
-  const rowIndex=rows.indexOf(row);
-  const inputs=Array.from(row.querySelectorAll("input"));
-  const colIndex=inputs.indexOf(input);
-  if(rowIndex<0||colIndex<0)return;
-  let target;
-  if(event.key==="ArrowLeft")target=inputs[colIndex-1];
-  else if(event.key==="ArrowRight")target=inputs[colIndex+1];
-  else {
-    const nextRow=rows[rowIndex+(event.key==="ArrowUp"?-1:1)];
-    if(nextRow)target=nextRow.querySelectorAll("input")[colIndex];
-  }
-  if(!target){event.preventDefault();return;}
-  event.preventDefault();
-  target.focus();
-  if(typeof target.select==="function")target.select();
-},true);
-
-
 const shelfDefaults={"POLICE ena debelina":[{title:"Police 3 cm",surface:110,edge:10}],"POLICE VEČ DEBELIN":[{title:"Police 2 cm",surface:100,edge:10},{title:"Police 3 cm",surface:110,edge:10}]};
 function shelfData(t,name){if(!t.shelfSections){t.shelfSections=shelfDefaults[name].map((d,i)=>({surface:d.surface,edge:d.edge,rows:i===0?(t.rows||[]).map(r=>({...r})):[]}));}t.shelfSections.forEach(sec=>{if(!Array.isArray(sec.rows))sec.rows=[];while(sec.rows.length<10)sec.rows.push({length:'',width:'',qty:''});});return t.shelfSections;}
 function shelfTotals(sec){let area=0,edge=0;for(const r of sec.rows){const l=n(r.length),w=n(r.width),q=n(r.qty);area+=l*w*q/10000;edge+=l*q/100;}return {area,edge,cost:area*n(sec.surface)+edge*n(sec.edge)};}
