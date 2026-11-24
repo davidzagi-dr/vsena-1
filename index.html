@@ -307,7 +307,7 @@ impalaRemoveSpinners();
 })();
 </script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script>(function(){
 const form=document.getElementById('zag-login-form'),status=document.getElementById('zag-login-status'),btn=document.getElementById('zag-submit');
-const localPreview=true;
+const localPreview=false;
 if(localPreview && !/access_token|refresh_token|type=recovery|[?&]code=/.test(location.hash+location.search)){
  document.documentElement.classList.add('zag-auth-ok','zag-local-preview');
  const foot=document.querySelector('.sidefoot');
