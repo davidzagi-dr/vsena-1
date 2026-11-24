@@ -332,7 +332,7 @@ window.zagAttachmentStorage=()=>authorized?client.storage.from('project-attachme
 let generation=0, recovering=false;
 const syncBox=document.createElement('div');
 syncBox.style.cssText='padding:12px;margin:12px 0;border:1px solid #aab5c1;border-radius:8px;background:#fff;color:#182536';
-syncBox.innerHTML='<strong>Sinhronizacija – preizkus</strong><p id="zag-sync-status" role="status">Čakam na prijavo.</p><button type="button" class="btn" id="zag-sync-read">Preveri oblak</button> <button type="button" class="btn" id="zag-sync-write" disabled>Prvi prenos v oblak</button>';
+syncBox.innerHTML='<strong>Sinhronizacija</strong><p id="zag-sync-status" role="status">Čakam na prijavo.</p><button type="button" class="btn" id="zag-sync-read">Preveri oblak</button> <button type="button" class="btn" id="zag-sync-write" disabled>Prvi prenos v oblak</button>';
 function mountSyncBox(){const slot=document.getElementById('zag-sync-slot');if(slot&&syncBox.parentNode!==slot)slot.appendChild(syncBox);}
 new MutationObserver(mountSyncBox).observe(document.getElementById('app'),{childList:true,subtree:true});mountSyncBox();
 const syncStatus=syncBox.querySelector('#zag-sync-status'),read=syncBox.querySelector('#zag-sync-read'),write=syncBox.querySelector('#zag-sync-write');
@@ -340,8 +340,8 @@ let busy=false, authorized=false, blocked=false, rev=null, baseline=null;
 const metaKey=key+'_sync_v2';
 const valid=x=>x&&['clients','projects','invoices','offers'].every(k=>Array.isArray(x[k]));
 const raw=()=>JSON.stringify(db);
-const note=m=>{syncStatus.textContent=m; indicator.textContent=m;};
-const indicator=document.createElement('div');indicator.style.cssText='position:fixed;right:12px;bottom:12px;z-index:90;background:#fff;color:#182536;padding:8px;border:1px solid #aab5c1;border-radius:8px;font-size:12px;max-width:75vw';document.body.appendChild(indicator);
+const note=m=>{const clean=m.replace(/\s*[–-]\s*različica\s+\d+/gi,'').replace(/\s*\(različica\s+\d+\)/gi,'');syncStatus.textContent=clean;indicator.textContent=clean==='Sinhronizirano'?'✓ Sinhronizirano':clean;indicator.style.color=clean==='Sinhronizirano'?'#a3e635':'#fcd34d';};
+const indicator=document.createElement('div');indicator.setAttribute('role','status');indicator.style.cssText='margin-top:10px;font-size:12px;line-height:1.4;overflow-wrap:anywhere';const side=document.querySelector('.sidefoot');if(side)side.appendChild(indicator);else document.body.appendChild(indicator);
 write.textContent='Ponovno preveri sinhronizacijo';write.disabled=false;
 syncBox.querySelector('strong').textContent='Samodejna sinhronizacija';
 function remember(){localStorage.setItem(metaKey,JSON.stringify({rev,baseline}));}
