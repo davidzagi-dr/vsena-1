@@ -12,7 +12,7 @@ function syncOverdueInvoices(){const d=today();let changed=false;for(const x of 
 let mailState={client:'',recipient:'',files:[],docs:[],subject:'',message:'',section:''};
 function mailClientName(x){const c=db.clients.find(c=>c.id===x.client);return c?.name||x.offerClientName||x.clientName||'Brez imena stranke';}
 function mailRecords(type){return (db[type]||[]).map((x,i)=>({x,i})).filter(({x})=>!mailState.client||x.client===mailState.client).sort((a,b)=>{const da=Date.parse(a.x.createdAt||a.x.date||a.x.created||'')||0,dbb=Date.parse(b.x.createdAt||b.x.date||b.x.created||'')||0;return dbb-da||b.i-a.i;}).map(({x})=>x);}
-function gmailPage(){const m=mailState;return '<div class="panel"><h2>✉ Gmail – priprava pošte</h2><button type="button" onclick="window.zagGmailTest(this)">Preveri povezavo Gmail</button><p id="zag-gmail-test-result" class="help" role="status"></p><p class="help">Izberi stranko in označi fotografije, ponudbe ali račune. Če vpišeš poljuben naslov, lahko izbiraš med vsemi dokumenti in fotografijami.</p><div class="formgrid"><label class="field">Stranka<select onchange="mailClient(this.value)"><option value="">Vse stranke / poljuben naslov</option>'+db.clients.map(c=>'<option value="'+esc(c.id)+'"'+(m.client===c.id?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label><label class="field">Prejemnik<input type="email" value="'+esc(m.recipient)+'" oninput="mailState.recipient=this.value" placeholder="stranka@example.com"></label></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin:18px 0">'+[['projects','▧','Projekti'],['offers','▤','Ponudbe'],['invoices','▣','Računi']].map(([k,icon,name])=>'<button type="button" class="btn'+(m.section===k?' primary':'')+'" style="padding:18px 12px;font-size:16px" onclick="mailSection(&quot;'+k+'&quot;)">'+icon+' '+name+'</button>').join('')+'</div><div id="mail-all-attachments"></div><div class="formgrid"><label class="field span2">Zadeva<input value="'+esc(m.subject)+'" oninput="mailState.subject=this.value" placeholder="Izris, ponudba ali račun"></label><label class="field span2">Sporočilo<textarea rows="6" oninput="mailState.message=this.value">'+esc(m.message)+'</textarea></label></div><div class="actions"><button type="button" class="btn" onclick="mailDownload()">Prenesi označene fotografije</button><button type="button" class="btn primary" onclick="mailDraft()">Odpri v Gmailu</button></div><p class="help">Izbrane fotografije prenesi in jih pripni v Gmailu. Označene ponudbe in račune odpri prek gumba »Pripravi PDF« in jih shrani kot PDF, nato pripni v Gmailu. Samodejno pošiljanje priponk še ni povezano.</p></div>';}
+function gmailPage(){const m=mailState;return '<div class="panel"><h2>✉ Gmail – priprava pošte</h2><button type="button" onclick="window.zagGmailTest(this)">Preveri povezavo Gmail</button> <button type="button" class="btn primary" onclick="window.zagGmailConnect(this)">Poveži Gmail račun</button><p id="zag-gmail-test-result" class="help" role="status"></p><p class="help">Izberi stranko in označi fotografije, ponudbe ali račune. Če vpišeš poljuben naslov, lahko izbiraš med vsemi dokumenti in fotografijami.</p><div class="formgrid"><label class="field">Stranka<select onchange="mailClient(this.value)"><option value="">Vse stranke / poljuben naslov</option>'+db.clients.map(c=>'<option value="'+esc(c.id)+'"'+(m.client===c.id?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label><label class="field">Prejemnik<input type="email" value="'+esc(m.recipient)+'" oninput="mailState.recipient=this.value" placeholder="stranka@example.com"></label></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin:18px 0">'+[['projects','▧','Projekti'],['offers','▤','Ponudbe'],['invoices','▣','Računi']].map(([k,icon,name])=>'<button type="button" class="btn'+(m.section===k?' primary':'')+'" style="padding:18px 12px;font-size:16px" onclick="mailSection(&quot;'+k+'&quot;)">'+icon+' '+name+'</button>').join('')+'</div><div id="mail-all-attachments"></div><div class="formgrid"><label class="field span2">Zadeva<input value="'+esc(m.subject)+'" oninput="mailState.subject=this.value" placeholder="Izris, ponudba ali račun"></label><label class="field span2">Sporočilo<textarea rows="6" oninput="mailState.message=this.value">'+esc(m.message)+'</textarea></label></div><div class="actions"><button type="button" class="btn" onclick="mailDownload()">Prenesi označene fotografije</button><button type="button" class="btn primary" onclick="mailDraft()">Odpri v Gmailu</button></div><p class="help">Izbrane fotografije prenesi in jih pripni v Gmailu. Označene ponudbe in račune odpri prek gumba »Pripravi PDF« in jih shrani kot PDF, nato pripni v Gmailu. Samodejno pošiljanje priponk še ni povezano.</p></div>';}
 function mailClient(v){mailState.client=v;mailState.recipient=db.clients.find(c=>c.id===v)?.email||'';mailState.files=[];mailState.docs=[];mailState.section='';render();}
 function mailSection(v){mailState.section=mailState.section===v?'':v;render();}
 function mailDocToggle(type,uid,on){const k=type+':'+uid;mailState.docs=on?[...new Set([...mailState.docs,k])]:mailState.docs.filter(x=>x!==k);}
@@ -337,6 +337,21 @@ function mountSyncBox(){const slot=document.getElementById('zag-sync-slot');if(s
 new MutationObserver(mountSyncBox).observe(document.getElementById('app'),{childList:true,subtree:true});mountSyncBox();
 const syncStatus=syncBox.querySelector('#zag-sync-status'),read=syncBox.querySelector('#zag-sync-read'),write=syncBox.querySelector('#zag-sync-write');
 let busy=false, authorized=false, blocked=false, rev=null, baseline=null;
+window.zagGmailConnect=async(button)=>{
+ const out=document.getElementById('zag-gmail-test-result');
+ if(!out||!authorized)return;
+ button.disabled=true;out.textContent='Pripravljam povezavo ...';
+ try{
+ const {data:{session},error}=await client.auth.getSession();
+ if(error||!session||!authorized)throw Error('Prijava je obvezna.');
+ const response=await fetch('https://hxvwahlwcyztwzomfupy.supabase.co/functions/v1/gmail-api',{method:'POST',headers:{Authorization:'Bearer '+session.access_token,apikey:'sb_publishable_1ce2zfNQrTHfb4ag7dTLlw_nTcCLxJr','Content-Type':'application/json'},body:JSON.stringify({action:'connect'})});
+ const result=await response.json();
+ if(!response.ok||!result.ok||!result.authorizationUrl)throw Error('Povezave ni bilo mogoče pripraviti (HTTP '+response.status+').');
+ const target=new URL(result.authorizationUrl);
+ if(target.origin!=='https://accounts.google.com'||target.pathname!=='/o/oauth2/v2/auth'||!authorized)throw Error('Neveljavna povezava.');
+ location.assign(target.href);
+ }catch(e){out.textContent=e.message||'Povezava ni uspela.';}finally{button.disabled=false;}
+};
 window.zagGmailTest=async(button)=>{
  const out=document.getElementById('zag-gmail-test-result');
  if(!out)return;
@@ -347,7 +362,7 @@ window.zagGmailTest=async(button)=>{
  if(error||!session||!authorized)throw Error('Prijava je obvezna.');
  const response=await fetch('https://hxvwahlwcyztwzomfupy.supabase.co/functions/v1/gmail-api',{method:'POST',headers:{Authorization:'Bearer '+session.access_token,apikey:'sb_publishable_1ce2zfNQrTHfb4ag7dTLlw_nTcCLxJr','Content-Type':'application/json'},body:'{}'});
  const result=await response.json();
- out.textContent=response.ok&&result.ok?'Uspešno: uporabnik je pooblaščen. Gmail račun še ni povezan.':'Preizkus ni uspel (HTTP '+response.status+').';
+ out.textContent=response.ok&&result.ok?'Uspešno: uporabnik je pooblaščen.':'Preizkus ni uspel (HTTP '+response.status+').';
  }catch(e){out.textContent='Preizkus ni uspel. Preveri prijavo in internetno povezavo.';}finally{button.disabled=false;}
 };
 
