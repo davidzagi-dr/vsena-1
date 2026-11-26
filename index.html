@@ -391,7 +391,7 @@ const zgHeader=(headers,name)=>(headers||[]).find(h=>h.name.toLowerCase()===name
 window.zagSettingsMailStatus=async()=>{const out=document.getElementById("zag-settings-mail-result");if(!out)return;try{const r=await zgCall({action:"status"});out.textContent=r.connected?"Povezan račun: "+r.email:"Gmail še ni povezan.";}catch(e){out.textContent=e.message;}};
 window.zagMailSearch=()=>{zgQuery=(document.getElementById("zg-search")?.value||"").trim();zagMailList(zgQuery?"ALL":"INBOX");};
 window.zagMailFolder=(label)=>{zgQuery="";const input=document.getElementById("zg-search");if(input)input.value="";zagMailList(label);};
-window.zagMailList=async(label=zgLabel,next=false)=>{
+let zgUnreadTimer;window.zagUnreadRefresh=async()=>{clearTimeout(zgUnreadTimer);const button=document.querySelector('[data-zg-label="INBOX"]');if(!button)return;try{const r=await zgCall({action:'unreadCount'});if(button.isConnected&&Number.isInteger(r.count)){button.textContent='▣ Prejeto';button.style.display='flex';button.style.justifyContent='space-between';button.style.fontWeight=r.count?'bold':'normal';if(r.count)button.append(zgNode('span',String(r.count)));}}catch(e){console.warn('Unread count:',e.message);}if(button.isConnected)zgUnreadTimer=setTimeout(zagUnreadRefresh,60000);};window.zagMailList=async(label=zgLabel,next=false)=>{
  const box=document.getElementById('zg-messages'),out=document.getElementById('zag-gmail-test-result');if(!box||!out)return;
  const seq=++zgSeq;zgLabel=label;const token=next?zgPage:null;zgPage=null;
  document.querySelectorAll('[data-zg-label]').forEach(b=>{b.style.background=b.dataset.zgLabel===label?'#d3e3fd':'transparent';});
@@ -402,7 +402,7 @@ window.zagMailList=async(label=zgLabel,next=false)=>{
  document.getElementById('zg-email').textContent=status.email||'';
  const data=await zgCall({action:'list',label,pageToken:token,q:zgQuery});if(seq!==zgSeq||!box.isConnected)return;
  if(!Array.isArray(data.messages))throw Error('Strežniški seznam pošte ni na voljo.');
- box.replaceChildren();zgPage=data.nextPageToken;
+ box.replaceChildren();zgPage=data.nextPageToken;zagUnreadRefresh();
  const visibleMessages=data.messages.filter(m=>label==='TRASH'?m.labelIds?.includes('TRASH'):!m.labelIds?.includes('TRASH')&&(label==='SPAM'||!m.labelIds?.includes('SPAM')));for(const m of visibleMessages){
  const row=document.createElement('button');row.type='button';row.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:8px;width:100%;text-align:left;border:0;border-bottom:1px solid #e1e5eb;padding:12px;background:'+(m.labelIds?.includes('UNREAD')?'#fff':'#f2f6fc')+';color:#202124;cursor:pointer;overflow-wrap:anywhere';
  const sent=label==='SENT';const from=zgNode('strong',sent?'Komu: '+(zgHeader(m.headers,'To')||'(neznan prejemnik)'):zgHeader(m.headers,'From'));const detail=document.createElement('div');detail.append(zgNode('strong',zgHeader(m.headers,'Subject')||'(brez zadeve)'),zgNode('div',m.snippet),zgNode('small',zgHeader(m.headers,'Date')));row.append(from,detail);row.onclick=()=>zagMailRead(m.id);box.append(row);
@@ -413,7 +413,7 @@ window.zagMailList=async(label=zgLabel,next=false)=>{
 };
 window.zagMailRead=async(id)=>{
  const box=document.getElementById('zg-messages');if(!box)return;const seq=++zgSeq;box.textContent='Odpiram sporočilo ...';
- try{const r=await zgCall({action:'read',id});if(seq!==zgSeq||!box.isConnected)return;const p=r.message?.payload;if(!p)throw Error('Sporočilo ni na voljo.');
+ try{const r=await zgCall({action:'read',id});if(seq!==zgSeq||!box.isConnected)return;const p=r.message?.payload;if(!p)throw Error('Sporočilo ni na voljo.');if(r.message.labelIds?.includes('UNREAD')){try{await zgCall({action:'modify',id,operation:'read'});zagUnreadRefresh();}catch(e){toast(e.message);}if(seq!==zgSeq||!box.isConnected)return;}
  box.replaceChildren();const back=zgNode('button','‹ Nazaj');back.className='btn';back.onclick=()=>zagMailList();box.append(back,zgNode('h2',zgHeader(p.headers,'Subject')||'(brez zadeve)'),zgNode('p','Od: '+zgHeader(p.headers,'From')),zgNode('p','Komu: '+(zgHeader(p.headers,'To')||'(neznan prejemnik)')),zgNode('small',zgHeader(p.headers,'Date')));
  const parts=[],htmlParts=[];function walk(x){if(!x.filename&&x.body?.data){if(x.mimeType==='text/plain')parts.push(x.body.data);if(x.mimeType==='text/html')htmlParts.push(x.body.data);}(x.parts||[]).forEach(walk);}walk(p);
  const decode=v=>new TextDecoder().decode(Uint8Array.from(atob(v.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(v.length/4)*4,'=')),c=>c.charCodeAt(0)));
