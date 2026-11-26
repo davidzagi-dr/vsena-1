@@ -351,7 +351,7 @@ window.zagGmailConnect=async(button)=>{
  const target=new URL(result.authorizationUrl);
  if(target.origin!=='https://accounts.google.com'||target.pathname!=='/o/oauth2/v2/auth'||!authorized)throw Error('Neveljavna povezava.');
  location.assign(target.href);
- }catch(e){out.textContent=e.message||'Povezava ni uspela.';}finally{button.disabled=false;button.textContent='Pošlji';}
+ }catch(e){out.textContent=e.message||'Povezava ni uspela.';}finally{zgSending=false;button.disabled=false;button.textContent='Pošlji';}
 };
 let zgLabel='INBOX',zgPage=null,zgSeq=0,zgQuery="";
 const zgCall=async(body)=>{
@@ -385,12 +385,15 @@ async function zgHtmlPdf(html,name,upn=''){await zgPdfLibraries();const frame=do
 async function zgValidatePdf(blob,name){const bytes=new Uint8Array(await blob.arrayBuffer());const head=new TextDecoder().decode(bytes.slice(0,8)),tail=new TextDecoder().decode(bytes.slice(-1024));if(bytes.length<500||!head.startsWith('%PDF-')||!tail.includes('%%EOF'))throw Error('Neveljaven PDF: '+name);}
 async function zgDocumentPdf(key){const [type,id]=key.split(':');if(!['offers','invoices'].includes(type))throw Error('Neveljaven dokument');const o=db[type].find(x=>x.id===id);if(!o)throw Error('Dokument ni najden');if(type==='invoices'&&!o.number)throw Error('Najprej izdaj račun');const net=discountedNet(sum(o.items||[],x=>(Number(x.qty)||0)*(Number(x.price)||0)),o.discount);const upn=type==='invoices'&&o.number&&o.status!=='Storniran'?upnQrPayload(o,zagorcOfferCompany(),o.taxMode==='reverse'?net:net*(1+(Number(o.vat)||0)/100)):'';return zgHtmlPdf(printDoc(type,id,null,true),zgPdfName((type==='offers'?'Ponudba ':'Račun ')+(o.number||'Osnutek')),upn);}
 async function zgPhotoPdf(f){const bitmap=await createImageBitmap(f.blob);const canvas=document.createElement('canvas');const scale=Math.min(1,1800/Math.max(bitmap.width,bitmap.height));canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();return zgHtmlPdf('<html><body style="margin:0;width:794px;height:1120px;display:flex;align-items:center;justify-content:center;background:white"><img style="max-width:718px;max-height:1040px;object-fit:contain" src="'+canvas.toDataURL('image/jpeg',0.92)+'"></body></html>',zgPdfName((f.name||'Fotografija').replace(/\.[^.]+$/,'')));}
+let zgSending=false;
+function zgSendCountdown(){return new Promise(resolve=>{const bar=document.createElement('div');bar.style.cssText='position:fixed;bottom:20px;left:20px;z-index:2147483647;background:#202124;color:white;padding:14px 18px;border-radius:8px;display:flex;align-items:center;gap:16px;box-shadow:0 4px 20px #0004';bar.setAttribute('role','status');const label=document.createElement('span'),cancel=document.createElement('button');cancel.type='button';cancel.className='btn';cancel.textContent='Razveljavi';bar.append(label,cancel);document.body.append(bar);let seconds=10;label.textContent='Pošiljanje čez '+seconds+' s';const finish=ok=>{clearInterval(timer);bar.remove();resolve(ok);};const timer=setInterval(()=>{seconds--;label.textContent='Pošiljanje čez '+seconds+' s';if(seconds<=0)finish(true);},1000);cancel.onclick=()=>{finish(false);toast('Pošiljanje preklicano.');};});}
 window.zagSendMail=async button=>{
+ if(zgSending)return;
  const m=mailState, to=m.recipient.trim();
  if(!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(to)||/[\r\n]/.test(to))return toast('Vpiši veljaven naslov');
  
  if(!zgSignatureReady&&!confirm('Podpis ni dosegljiv. Pošljem brez podpisa?'))return;if(!confirm('Pošljem sporočilo na '+to+'?'))return;
- button.disabled=true;
+ zgSending=true;button.disabled=true;
  try{
  const files=[...zgFiles];button.textContent='Pripravljam PDF …';for(const key of [...m.docs])files.push(await zgDocumentPdf(key));for(const id of [...m.files]){const f=await getProjectAttachment(id);if(!f?.blob)throw Error('Fotografija ni dosegljiva');files.push(await zgPhotoPdf(f));}button.textContent='Pošiljam …';
  if(files.reduce((n,f)=>n+f.size,0)>6000000)throw Error('Skupna velikost priponk je omejena na 6 MB.');
@@ -400,6 +403,7 @@ window.zagSendMail=async button=>{
  if(inlineLogo){raw+=['--'+related,'Content-Type: image/png','Content-Transfer-Encoding: base64','Content-ID: <zagorc-logo>','Content-Disposition: inline; filename="logo.png"','',inlineLogo[1].match(/.{1,76}/g).join(nl),'--'+related+'--',''].join(nl);}
  for(const f of files){if(f.type==='application/pdf')await zgValidatePdf(f,f.name);raw+=['--'+boundary,'Content-Type: '+(f.type==='application/pdf'?'application/pdf':'application/octet-stream'),'Content-Disposition: attachment; filename="'+f.name.replace(/[^a-zA-Z0-9._ -]/g,'_')+'"; filename*=UTF-8\'\''+encodeURIComponent(f.name),'Content-Transfer-Encoding: base64','',zgB64(new Uint8Array(await f.arrayBuffer())).match(/.{1,76}/g)?.join(nl)||'',''].join(nl);}
  raw+='--'+boundary+'--'+nl;
+ if(!await zgSendCountdown())return;
  await zgCall({action:'send',threadId:m.threadId,raw:zgEncode(raw).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')});
  zgFiles=[];m.threadId=undefined;m.replyId='';m.references='';m.quote='';m.files=[];m.docs=[];m.recipient='';m.subject='';m.message='';m.client='';m.section='';render();toast('Sporočilo poslano');
  }catch(e){toast(e.message||'Pošiljanje ni potrjeno. Preveri mapo Poslano pred ponovitvijo.');}finally{button.disabled=false;button.textContent='Pošlji';}
