@@ -403,11 +403,11 @@ window.zagMailList=async(label=zgLabel,next=false)=>{
  const data=await zgCall({action:'list',label,pageToken:token,q:zgQuery});if(seq!==zgSeq||!box.isConnected)return;
  if(!Array.isArray(data.messages))throw Error('Strežniški seznam pošte ni na voljo.');
  box.replaceChildren();zgPage=data.nextPageToken;
- for(const m of data.messages){
+ const visibleMessages=data.messages.filter(m=>label==='TRASH'?m.labelIds?.includes('TRASH'):!m.labelIds?.includes('TRASH')&&(label==='SPAM'||!m.labelIds?.includes('SPAM')));for(const m of visibleMessages){
  const row=document.createElement('button');row.type='button';row.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:8px;width:100%;text-align:left;border:0;border-bottom:1px solid #e1e5eb;padding:12px;background:'+(m.labelIds?.includes('UNREAD')?'#fff':'#f2f6fc')+';color:#202124;cursor:pointer;overflow-wrap:anywhere';
  const sent=label==='SENT';const from=zgNode('strong',sent?'Komu: '+(zgHeader(m.headers,'To')||'(neznan prejemnik)'):zgHeader(m.headers,'From'));const detail=document.createElement('div');detail.append(zgNode('strong',zgHeader(m.headers,'Subject')||'(brez zadeve)'),zgNode('div',m.snippet),zgNode('small',zgHeader(m.headers,'Date')));row.append(from,detail);row.onclick=()=>zagMailRead(m.id);box.append(row);
  }
- if(!data.messages.length)box.textContent='V tej mapi ni sporočil.';
+ if(!visibleMessages.length)box.textContent='V tej mapi ni sporočil.';
  if(zgPage){const b=zgNode('button','Naslednja stran ›');b.className='btn';b.onclick=()=>zagMailList(label,true);box.append(b);}
  }catch(e){if(seq===zgSeq&&box.isConnected)box.textContent=e.message;}
 };
@@ -419,7 +419,7 @@ window.zagMailRead=async(id)=>{
  const decode=v=>new TextDecoder().decode(Uint8Array.from(atob(v.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(v.length/4)*4,'=')),c=>c.charCodeAt(0)));
  const body=zgNode('div',parts.length?parts.map(decode).join('\n\n'):(r.message.snippet||'Sporočilo nima besedilne različice.')+'\n\nZa celoten HTML in priponke odpri Gmail.');body.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;padding:20px 0';box.append(body);
  const toolbar=document.createElement('div');toolbar.style.cssText='display:flex;flex-wrap:wrap;gap:8px;margin:12px 0';
- for(const [op,label] of [['archive','Arhiviraj'],['trash','V koš'],['unread','Označi neprebrano'],[r.message.labelIds?.includes('STARRED')?'unstar':'star','☆ Zvezdica'],['untrash','Obnovi iz koša']]){const b=zgNode('button',label);b.className='btn';b.onclick=async()=>{b.disabled=true;try{await zgCall({action:'modify',id,operation:op});zagMailList();}catch(e){toast(e.message);b.disabled=false;}};toolbar.append(b);}
+ for(const [op,label] of [['archive','Arhiviraj'],['trash','V koš'],['unread','Označi neprebrano'],[r.message.labelIds?.includes('STARRED')?'unstar':'star','☆ Zvezdica'],['untrash','Obnovi iz koša']]){const b=zgNode('button',label);b.className='btn';b.onclick=async()=>{b.disabled=true;try{await zgCall({action:'modify',id,operation:op});if(op==='trash')toast('Sporočilo premaknjeno v koš');if(op==='untrash')toast('Sporočilo obnovljeno');zagMailList();}catch(e){toast(e.message);b.disabled=false;}};toolbar.append(b);}
  for(const forward of [false,true]){const b=zgNode('button',forward?'Posreduj':'Odgovori');b.className='btn';b.onclick=()=>{const from=zgHeader(p.headers,'Reply-To')||zgHeader(p.headers,'From');mailState.recipient=forward?'':(from.match(/<([^>]+)>/)?.[1]||from);mailState.subject=(forward?'Fwd: ':'Re: ')+zgHeader(p.headers,'Subject');mailState.message='\n\n'+body.textContent;render();zagMailCompose();};toolbar.append(b);}
  box.insertBefore(toolbar,body);
  function attachments(x){if(x.filename&&x.body?.attachmentId){const b=zgNode('button','Prenesi '+x.filename);b.className='btn';b.onclick=async()=>{try{const a=await zgCall({action:'attachment',id,attachmentId:x.body.attachmentId});const v=a.data.replace(/-/g,'+').replace(/_/g,'/');const blob=new Blob([Uint8Array.from(atob(v),c=>c.charCodeAt(0))]);const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=x.filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);}catch(e){toast(e.message);}};box.append(b);}(x.parts||[]).forEach(attachments);}attachments(p);
