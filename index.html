@@ -364,7 +364,8 @@ const zgCall=async(body)=>{
  if(!response.ok||!result.ok)throw Error(result.error||'Napaka Gmail (HTTP '+response.status+')');
  return result;
 };
-window.zagMailCompose=()=>{const c=document.getElementById('zg-compose');if(c){c.hidden=false;c.scrollIntoView({behavior:'smooth'});}};
+let zgSignatureHtml='';let zgSignatureReady=false;let zgSignatureSeq=0;
+window.zagMailCompose=async()=>{const c=document.getElementById('zg-compose');if(!c)return;c.hidden=false;c.scrollIntoView({behavior:'smooth'});const seq=++zgSignatureSeq;zgSignatureReady=false;zgSignatureHtml='';let preview=document.createElement('div');preview.id='zg-signature-preview';c.querySelector('#zg-signature-preview')?.remove();const field=c.querySelector('textarea');if(field)field.after(preview);else c.append(preview);preview.textContent='Nalaganje podpisa ...';try{const r=await zgCall({action:'signature'});if(seq!==zgSignatureSeq||!c.isConnected)return;const d=new DOMParser().parseFromString(r.signature||'','text/html');d.querySelectorAll('script,iframe,object,embed,form,base,meta,link,svg').forEach(n=>n.remove());d.querySelectorAll('*').forEach(n=>{for(const a of [...n.attributes]){if(/^on/i.test(a.name)||(['src','href'].includes(a.name.toLowerCase())&&!/^(https:|mailto:|tel:)/i.test(a.value)))n.removeAttribute(a.name);}});zgSignatureHtml=d.body.innerHTML;zgSignatureReady=true;preview.replaceChildren();if(zgSignatureHtml){const f=document.createElement('iframe');f.setAttribute('sandbox','');f.style.cssText='width:100%;height:160px;border:0';f.srcdoc='<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src https:; style-src \'unsafe-inline\'">'+zgSignatureHtml;preview.append(f);const label=document.createElement('label'),check=document.createElement('input');check.type='checkbox';check.checked=true;check.onchange=()=>{zgSignatureHtml=check.checked?d.body.innerHTML:'';f.hidden=!check.checked;};label.append(check,' Dodaj podpis');preview.append(label);}}catch(e){preview.textContent='Podpis ni dosegljiv. Ponovno poveži Gmail v nastavitvah.';}};
 let zgFiles=[];
 window.zagChooseFiles=input=>{zgFiles=Array.from(input.files);document.getElementById('zg-file-names').textContent=zgFiles.map(f=>f.name).join(', ');};
 const zgB64=bytes=>{let v='';for(let i=0;i<bytes.length;i+=8192)v+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(v);};
@@ -373,13 +374,13 @@ window.zagSendMail=async button=>{
  const m=mailState, to=m.recipient.trim();
  if(!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(to)||/[\r\n]/.test(to))return toast('Vpiši veljaven naslov');
  if(m.docs.length)return toast('Izbrane dokumente najprej shrani kot PDF, dodaj med priponke iz naprave in odznači dokumente.');
- if(!confirm('Pošljem sporočilo na '+to+'?'))return;
+ if(!zgSignatureReady&&!confirm('Podpis ni dosegljiv. Pošljem brez podpisa?'))return;if(!confirm('Pošljem sporočilo na '+to+'?'))return;
  button.disabled=true;
  try{
  const files=[...zgFiles];for(const id of m.files){const f=await getProjectAttachment(id);if(!f?.blob)throw Error('Fotografija ni dosegljiva');files.push(new File([f.blob],f.name||'fotografija',{type:f.type||f.blob.type}));}
  if(files.reduce((n,f)=>n+f.size,0)>6000000)throw Error('Skupna velikost priponk je omejena na 6 MB.');
  const boundary='zag_'+crypto.randomUUID(),nl='\r\n';
- let raw=['To: '+to,'Subject: =?UTF-8?B?'+zgEncode(m.subject||'')+'?=','MIME-Version: 1.0','Content-Type: multipart/mixed; boundary="'+boundary+'"','','--'+boundary,'Content-Type: text/plain; charset=UTF-8','Content-Transfer-Encoding: base64','',zgEncode(m.message||'')].join(nl)+nl;
+ let raw=['To: '+to,'Subject: =?UTF-8?B?'+zgEncode(m.subject||'')+'?=','MIME-Version: 1.0','Content-Type: multipart/mixed; boundary="'+boundary+'"','','--'+boundary,'Content-Type: text/html; charset=UTF-8','Content-Transfer-Encoding: base64','',zgEncode((()=>{const msg=m.message||'';const safe=v=>v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');const q=/^(Re:|Fwd:)/i.test(m.subject||'')?msg.indexOf('\n\n'):-1;return q>=0?safe(msg.slice(0,q))+'<br><br>'+zgSignatureHtml+'<br><br>'+safe(msg.slice(q)):safe(msg)+'<br><br>'+zgSignatureHtml;})())].join(nl)+nl;
  for(const f of files){raw+=['--'+boundary,'Content-Type: application/octet-stream','Content-Disposition: attachment; filename*=UTF-8\'\''+encodeURIComponent(f.name),'Content-Transfer-Encoding: base64','',zgB64(new Uint8Array(await f.arrayBuffer())).match(/.{1,76}/g)?.join(nl)||'',''].join(nl);}
  raw+='--'+boundary+'--'+nl;
  await zgCall({action:'send',raw:zgEncode(raw).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')});
