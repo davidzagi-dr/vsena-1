@@ -405,7 +405,7 @@ window.zagMailList=async(label=zgLabel,next=false)=>{
  box.replaceChildren();zgPage=data.nextPageToken;
  for(const m of data.messages){
  const row=document.createElement('button');row.type='button';row.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:8px;width:100%;text-align:left;border:0;border-bottom:1px solid #e1e5eb;padding:12px;background:'+(m.labelIds?.includes('UNREAD')?'#fff':'#f2f6fc')+';color:#202124;cursor:pointer;overflow-wrap:anywhere';
- const from=zgNode('strong',zgHeader(m.headers,'From'));const detail=document.createElement('div');detail.append(zgNode('strong',zgHeader(m.headers,'Subject')||'(brez zadeve)'),zgNode('div',m.snippet),zgNode('small',zgHeader(m.headers,'Date')));row.append(from,detail);row.onclick=()=>zagMailRead(m.id);box.append(row);
+ const sent=label==='SENT';const from=zgNode('strong',sent?'Komu: '+(zgHeader(m.headers,'To')||'(neznan prejemnik)'):zgHeader(m.headers,'From'));const detail=document.createElement('div');detail.append(zgNode('strong',zgHeader(m.headers,'Subject')||'(brez zadeve)'),zgNode('div',m.snippet),zgNode('small',zgHeader(m.headers,'Date')));row.append(from,detail);row.onclick=()=>zagMailRead(m.id);box.append(row);
  }
  if(!data.messages.length)box.textContent='V tej mapi ni sporočil.';
  if(zgPage){const b=zgNode('button','Naslednja stran ›');b.className='btn';b.onclick=()=>zagMailList(label,true);box.append(b);}
@@ -414,7 +414,7 @@ window.zagMailList=async(label=zgLabel,next=false)=>{
 window.zagMailRead=async(id)=>{
  const box=document.getElementById('zg-messages');if(!box)return;const seq=++zgSeq;box.textContent='Odpiram sporočilo ...';
  try{const r=await zgCall({action:'read',id});if(seq!==zgSeq||!box.isConnected)return;const p=r.message?.payload;if(!p)throw Error('Sporočilo ni na voljo.');
- box.replaceChildren();const back=zgNode('button','‹ Nazaj');back.className='btn';back.onclick=()=>zagMailList();box.append(back,zgNode('h2',zgHeader(p.headers,'Subject')||'(brez zadeve)'),zgNode('p',zgHeader(p.headers,'From')),zgNode('small',zgHeader(p.headers,'Date')));
+ box.replaceChildren();const back=zgNode('button','‹ Nazaj');back.className='btn';back.onclick=()=>zagMailList();box.append(back,zgNode('h2',zgHeader(p.headers,'Subject')||'(brez zadeve)'),zgNode('p','Od: '+zgHeader(p.headers,'From')),zgNode('p','Komu: '+(zgHeader(p.headers,'To')||'(neznan prejemnik)')),zgNode('small',zgHeader(p.headers,'Date')));
  const parts=[];function walk(x){if(x.mimeType==='text/plain'&&!x.filename&&x.body?.data)parts.push(x.body.data);(x.parts||[]).forEach(walk);}walk(p);
  const decode=v=>new TextDecoder().decode(Uint8Array.from(atob(v.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(v.length/4)*4,'=')),c=>c.charCodeAt(0)));
  const body=zgNode('div',parts.length?parts.map(decode).join('\n\n'):(r.message.snippet||'Sporočilo nima besedilne različice.')+'\n\nZa celoten HTML in priponke odpri Gmail.');body.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;padding:20px 0';box.append(body);
