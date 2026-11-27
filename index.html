@@ -474,7 +474,7 @@ write.textContent='Ponovno preveri sinhronizacijo';write.disabled=false;
 syncBox.querySelector('strong').textContent='Samodejna sinhronizacija';
 function remember(){localStorage.setItem(metaKey,JSON.stringify({rev,baseline}));}
 function conflict(){blocked=true;note('Konflikt podatkov – lokalne spremembe ohranjene. Izvozi JSON in preveri oblak.');}
-async function inspectCloud(){
+async function inspectCloud(navPage=null,navVersion=null){
  if(!authorized||busy||blocked)return;
  busy=true;const g=generation;
  try{
@@ -497,7 +497,7 @@ async function inspectCloud(){
  }
  if(data.revision!==rev){
  if(current!==baseline){conflict();return;}
- if(page!=='home'||modal||document.activeElement?.matches('input,textarea,select')){note('Novejši podatki v oblaku – odpri Domov za osvežitev.');return;}
+ if((page!=='home'&&(page!==navPage||navVersion!==navSyncVersion))||modal||document.activeElement?.matches('input,textarea,select')||document.getElementById('zg-compose')?.hidden===false){note('Novejši podatki v oblaku – odpri Domov za osvežitev.');return;}
  localStorage.setItem(key+'_before_remote',current);db=data.data;localStorage.setItem(key,raw());rev=data.revision;baseline=raw();remember();render();
  }
  note(current===baseline||raw()===baseline?'Sinhronizirano – različica '+rev:'Čakajoče lokalne spremembe');
@@ -520,6 +520,7 @@ setInterval(cleanupPurgedAttachments,15000);
 window.zagSyncSave=()=>{if(authorized&&!blocked){note('Čakajoče lokalne spremembe');void push();}};
 async function tick(){if(!authorized||busy||blocked)return;if(rev!==null&&raw()!==baseline)await push();else await inspectCloud();}
 read.addEventListener('click',tick);write.addEventListener('click',tick);
+let navSyncVersion=0;let navSyncPending=false;document.getElementById('nav').addEventListener('click',e=>{if(!e.target.closest('button'))return;++navSyncVersion;navSyncPending=true;void runNavSync();});async function runNavSync(){if(!navSyncPending||!authorized||blocked)return;if(busy){setTimeout(runNavSync,200);return;}navSyncPending=false;const version=navSyncVersion,target=page;if(rev!==null&&raw()!==baseline)await push();if(!blocked&&version===navSyncVersion&&target===page)await inspectCloud(target,version);if(navSyncPending)void runNavSync();}
 setInterval(tick,5000);window.addEventListener('online',tick);
 window.addEventListener('beforeunload',e=>{if(authorized&&rev!==null&&raw()!==baseline){e.preventDefault();e.returnValue='';}});
 function recovery(){recovering=true;++generation;authorized=false;lock();form.innerHTML='<h2>Nastavitev novega gesla</h2><label>Novo geslo<input id="zag-new" type="password" autocomplete="new-password" minlength="6" required></label><label>Ponovi novo geslo<input id="zag-repeat" type="password" autocomplete="new-password" minlength="6" required></label><button type="submit">Shrani geslo</button><p id="zag-recovery-status" role="status"></p>';}
