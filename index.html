@@ -351,7 +351,7 @@ window.zagGmailConnect=async(button)=>{
  const target=new URL(result.authorizationUrl);
  if(target.origin!=='https://accounts.google.com'||target.pathname!=='/o/oauth2/v2/auth'||!authorized)throw Error('Neveljavna povezava.');
  location.assign(target.href);
- }catch(e){out.textContent=e.message||'Povezava ni uspela.';}finally{zgSending=false;button.disabled=false;button.textContent='Pošlji';}
+ }catch(e){out.textContent=e.message||'Povezava ni uspela.';}finally{button.disabled=false;}
 };
 let zgLabel='INBOX',zgPage=null,zgSeq=0,zgQuery="";
 const zgCall=async(body)=>{
@@ -388,7 +388,7 @@ async function zgPhotoPdf(f){const bitmap=await createImageBitmap(f.blob);const 
 let zgSending=false;
 function zgSendCountdown(){return new Promise(resolve=>{const bar=document.createElement('div');bar.style.cssText='position:fixed;bottom:20px;left:20px;z-index:2147483647;background:#202124;color:white;padding:14px 18px;border-radius:8px;display:flex;align-items:center;gap:16px;box-shadow:0 4px 20px #0004';bar.setAttribute('role','status');const label=document.createElement('span'),cancel=document.createElement('button');cancel.type='button';cancel.className='btn';cancel.textContent='Razveljavi';bar.append(label,cancel);document.body.append(bar);let seconds=10;label.textContent='Pošiljanje čez '+seconds+' s';const finish=ok=>{clearInterval(timer);bar.remove();resolve(ok);};const timer=setInterval(()=>{seconds--;label.textContent='Pošiljanje čez '+seconds+' s';if(seconds<=0)finish(true);},1000);cancel.onclick=()=>{finish(false);toast('Pošiljanje preklicano.');};});}
 window.zagSendMail=async button=>{
- if(zgSending)return;
+ if(zgSending){toast('Pošiljanje že poteka.');return;}
  const m=mailState, to=m.recipient.trim();
  if(!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(to)||/[\r\n]/.test(to))return toast('Vpiši veljaven naslov');
  
@@ -406,7 +406,7 @@ window.zagSendMail=async button=>{
  if(!await zgSendCountdown())return;
  await zgCall({action:'send',threadId:m.threadId,raw:zgEncode(raw).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')});
  zgFiles=[];m.threadId=undefined;m.replyId='';m.references='';m.quote='';m.files=[];m.docs=[];m.recipient='';m.subject='';m.message='';m.client='';m.section='';render();toast('Sporočilo poslano');
- }catch(e){toast(e.message||'Pošiljanje ni potrjeno. Preveri mapo Poslano pred ponovitvijo.');}finally{button.disabled=false;button.textContent='Pošlji';}
+ }catch(e){toast(e.message||'Pošiljanje ni potrjeno. Preveri mapo Poslano pred ponovitvijo.');}finally{zgSending=false;button.disabled=false;button.textContent='Pošlji';}
 };
 const zgNode=(tag,value)=>{const n=document.createElement(tag);n.textContent=value||'';return n;};
 const zgHeader=(headers,name)=>(headers||[]).find(h=>h.name.toLowerCase()===name.toLowerCase())?.value||'';
