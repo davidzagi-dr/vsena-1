@@ -507,12 +507,35 @@ async function inspectCloud(navPage=null,navVersion=null){
  note(current===baseline||raw()===baseline?'Sinhronizirano – različica '+rev:'Čakajoče lokalne spremembe');
  }catch(e){note('Oblak ni dosegljiv – lokalni podatki ostajajo.');}finally{busy=false;}
 }
+function mergeBusiness(base,local,remote){
+ const eq=(a,b)=>a===b||(a!==null&&b!==null&&typeof a==='object'&&typeof b==='object'&&Array.isArray(a)===Array.isArray(b)&&Object.keys(a).length===Object.keys(b).length&&Object.keys(a).every(k=>Object.prototype.hasOwnProperty.call(b,k)&&eq(a[k],b[k])));
+ const fail=()=>{throw Error('SYNC_CONFLICT')};
+ const merge=(b,l,r)=>{if(eq(l,b))return r;if(eq(r,b)||eq(l,r))return l;fail();};
+ const out={...remote};
+ for(const k of new Set([...Object.keys(base),...Object.keys(local),...Object.keys(remote)])){
+ const b=base[k],l=local[k],r=remote[k];
+ if(eq(l,b)||eq(r,b)||eq(l,r)){const v=merge(b,l,r);if(v===undefined)delete out[k];else out[k]=v;continue;}
+ if(!['projects','clients','offers','invoices','expenses','calendarTasks'].includes(k)||![b,l,r].every(a=>Array.isArray(a)&&a.every(x=>x&&typeof x.id==='string')&&new Set(a.map(x=>x.id)).size===a.length))fail();
+ const bm=new Map(b.map(x=>[x.id,x])),lm=new Map(l.map(x=>[x.id,x])),rm=new Map(r.map(x=>[x.id,x]));
+ out[k]=[];for(const id of new Set([...rm.keys(),...lm.keys(),...bm.keys()])){const v=merge(bm.get(id),lm.get(id),rm.get(id));if(v!==undefined)out[k].push(v);}
+ }
+ for(const k of ['offers','invoices']){const nums=(out[k]||[]).filter(x=>x.number).map(x=>String(x.number).replace(/^0+(?=\d)/,''));if(new Set(nums).size!==nums.length)fail();}
+ return out;
+}
 async function push(){
  if(!authorized||busy||blocked||rev===null||raw()===baseline)return;
  busy=true;const g=generation,snapshot=raw();note('Sinhronizacija v teku …');
  try{const {data,error}=await client.rpc('save_business_data',{p_id:'zagorc',p_data:JSON.parse(snapshot),p_revision:rev});
  if(g!==generation||!authorized)return;
- if(error){if(String(error.message).includes('SYNC_CONFLICT')){conflict();return;}throw error;}
+ if(error){if(String(error.message).includes('SYNC_CONFLICT')){
+ const latest=await client.from('business_data').select('data,revision').eq('id','zagorc').single();
+ if(g!==generation||!authorized)return;
+ if(latest.error||!latest.data||!valid(latest.data.data))throw Error('read');
+ if(modal||document.activeElement?.matches('input,textarea,select')||document.getElementById('zg-compose')?.hidden===false){note('Novejši podatki v oblaku – zaključite urejanje za združitev.');return;}
+ let merged;try{merged=mergeBusiness(JSON.parse(baseline),JSON.parse(raw()),latest.data.data);}catch(e){conflict();return;}
+ const previous=raw();localStorage.setItem(key+'_before_merge',previous);
+ db=merged;rev=latest.data.revision;baseline=JSON.stringify(latest.data.data);localStorage.setItem(key,raw());remember();render();note('Spremembe združene – čaka shranjevanje.');return;
+ }throw error;}
  if(!Number.isSafeInteger(Number(data))||Number(data)!==rev+1)throw Error('revision');
  rev=Number(data);baseline=snapshot;remember();note(raw()===baseline?'Sinhronizirano – različica '+rev:'Čakajoče lokalne spremembe');
  }catch(e){note('Prenos ni potrjen – lokalni podatki ostajajo.');}finally{busy=false;}
